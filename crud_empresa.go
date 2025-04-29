@@ -32,12 +32,13 @@ type Department struct {
 	projects []*Project
 }
 
-const employee_filename = "employee.txt"
-const project_filename = "project.txt"
-const department_filename = "department.txt"
+const (
+	employeeFilename   = "employee.txt"
+	projectFilename    = "project.txt"
+	departmentFilename = "department.txt"
+)
 
 func createEmployee(Employee Employee) {
-
 }
 
 // falta add a exception
@@ -47,19 +48,19 @@ func readProjects() ([]Project, error)
 func readProjectByID(id int) (*Project, error)*/
 
 func initializeFiles() {
-	employee_file, err := os.Create(employee_filename)
+	employee_file, err := os.Create(employeeFilename)
 	if err != nil {
 		panic(0)
 	}
 	defer employee_file.Close()
 
-	department_file, err := os.Create(department_filename)
+	department_file, err := os.Create(departmentFilename)
 	if err != nil {
 		panic(0)
 	}
 	defer department_file.Close()
 
-	project_file, err := os.Create(project_filename)
+	project_file, err := os.Create(projectFilename)
 	if err != nil {
 		panic(0)
 	}
@@ -155,7 +156,6 @@ func departmentMenu() {
 
 		switch op {
 		case 1:
-			// TODO: implementar
 			fmt.Println("Criando departamento...")
 		case 2:
 			fmt.Println("Listando departamentos...")
