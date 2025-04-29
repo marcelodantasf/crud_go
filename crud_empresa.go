@@ -38,7 +38,15 @@ const (
 	departmentFilename = "department.txt"
 )
 
-func createEmployee(Employee Employee) {
+func createEmployee(employee Employee) error {
+	file, err := os.OpenFile(employeeFilename, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(fmt.Sprintf("%s,%s,%s,%s,%f,%s,%s\n", employee.firstName, employee.middleNameInitial, employee.lastName, employee.cpf, employee.salary, employee.gender, employee.dateOfBirth))
+	return err
 }
 
 // falta add a exception
@@ -48,23 +56,15 @@ func readProjects() ([]Project, error)
 func readProjectByID(id int) (*Project, error)*/
 
 func initializeFiles() {
-	employee_file, err := os.Create(employeeFilename)
-	if err != nil {
-		panic(0)
-	}
-	defer employee_file.Close()
+	files := []string{employeeFilename, departmentFilename, projectFilename}
 
-	department_file, err := os.Create(departmentFilename)
-	if err != nil {
-		panic(0)
+	for _, filename := range files {
+		file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR, 0644)
+		if err != nil {
+			panic(err)
+		}
+		defer file.Close()
 	}
-	defer department_file.Close()
-
-	project_file, err := os.Create(projectFilename)
-	if err != nil {
-		panic(0)
-	}
-	defer project_file.Close()
 }
 
 func employeeMenu() {
@@ -88,6 +88,16 @@ func employeeMenu() {
 		case 1:
 			// TODO: implementar
 			fmt.Println("Criando funcionário...")
+			var emp1 Employee
+			emp1.firstName = "kelvin"
+			emp1.middleNameInitial = "L"
+			emp1.lastName = "Rodrigues"
+			emp1.address = "av 13 de maio"
+			emp1.cpf = "61824604319"
+			emp1.salary = 38813.32
+			emp1.gender = "M"
+			createEmployee(emp1)
+
 		case 2:
 			fmt.Println("Listando funcionários...")
 		case 3:
