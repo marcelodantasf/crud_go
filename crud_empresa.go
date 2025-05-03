@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
-	//"strconv"
+	"strconv"
+	"strings"
 )
 
 type Employee struct {
@@ -38,23 +40,6 @@ const (
 	departmentFilename = "department.txt"
 )
 
-func createEmployee(employee Employee) error {
-	file, err := os.OpenFile(employeeFilename, os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	_, err = file.WriteString(fmt.Sprintf("%s,%s,%s,%s,%f,%s,%s\n", employee.firstName, employee.middleNameInitial, employee.lastName, employee.cpf, employee.salary, employee.gender, employee.dateOfBirth))
-	return err
-}
-
-// falta add a exception
-/*func readEmployees() ([]Employee, error)
-func createProject(Project Project) //+exception
-func readProjects() ([]Project, error)
-func readProjectByID(id int) (*Project, error)*/
-
 func initializeFiles() {
 	files := []string{employeeFilename, departmentFilename, projectFilename}
 
@@ -67,6 +52,105 @@ func initializeFiles() {
 	}
 }
 
+func createEmployee(employee Employee) error {
+	file, err := os.OpenFile(employeeFilename, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(fmt.Sprintf("%s,%s,%s,%s,%f,%s,%s\n", employee.firstName, employee.middleNameInitial, employee.lastName, employee.cpf, employee.salary, employee.gender, employee.dateOfBirth))
+	return err
+}
+
+// falta add a exception
+
+func readEmployees() ([]Employee, error) {
+	file, err := os.Open(employeeFilename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var employees []Employee
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Split(line, ",")
+		if len(fields) < 7 {
+			continue // Linha mal formatada
+		}
+
+		salary, err := strconv.ParseFloat(fields[4], 64)
+		if err != nil {
+			continue
+		}
+
+		employee := Employee{
+			firstName:         fields[0],
+			middleNameInitial: fields[1],
+			lastName:          fields[2],
+			cpf:               fields[3],
+			salary:            salary,
+			gender:            fields[5],
+			dateOfBirth:       fields[6],
+		}
+		employees = append(employees, employee)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return employees, nil
+}
+
+func readEmployeeByCPF(cpf string) (*Employee, error) {
+	file, err := os.Open(employeeFilename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Split(line, ",")
+
+		if len(fields) < 7 {
+			continue // linha mal formatada
+		}
+
+		salary, err := strconv.ParseFloat(fields[4], 64)
+		if err != nil {
+			continue
+		}
+
+		if fields[3] == cpf {
+			// Encontrou o funcionário
+			return &Employee{
+				firstName:         fields[0],
+				middleNameInitial: fields[1],
+				lastName:          fields[2],
+				cpf:               fields[3],
+				salary:            salary,
+				gender:            fields[5],
+				dateOfBirth:       fields[6],
+			}, nil
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return nil, fmt.Errorf("Funcionário com CPF %s não encontrado", cpf)
+}
+
+/*func createProject(Project Project) //+exception
+func readProjects() ([]Project, error)
+func readProjectByID(id int) (*Project, error)*/
+
 func employeeMenu() {
 	var op int
 	for {
@@ -75,6 +159,7 @@ func employeeMenu() {
 		fmt.Println("2: Listar funcionários")
 		fmt.Println("3: Alterar funcionário")
 		fmt.Println("4: Excluir funcionário")
+		fmt.Println("5: Buscar funcionário")
 		fmt.Println("0: Voltar")
 		fmt.Print("Digite a opção: ")
 
@@ -99,11 +184,36 @@ func employeeMenu() {
 			createEmployee(emp1)
 
 		case 2:
-			fmt.Println("Listando funcionários...")
+			employees, err := readEmployees()
+			if err != nil {
+				fmt.Println("Erro ao ler funcionários:", err)
+				break
+			}
+			for _, emp := range employees {
+				fmt.Printf("Nome: %s %s %s | CPF: %s | Salário: %.2f | Gênero: %s | Nascimento: %s\n",
+					emp.firstName, emp.middleNameInitial, emp.lastName,
+					emp.cpf, emp.salary, emp.gender, emp.dateOfBirth)
+			}
 		case 3:
 			fmt.Println("Alterando funcionário...")
 		case 4:
 			fmt.Println("Excluindo funcionário...")
+		case 5:
+			fmt.Println("Buscar funcionário por CPF...")
+			fmt.Print("Digite o CPF: ")
+			var cpf string
+			fmt.Scan(&cpf)
+
+			employee, err := readEmployeeByCPF(cpf)
+			if err != nil {
+				fmt.Println("Erro:", err)
+			} else {
+				fmt.Printf("Nome: %s %s %s\n", employee.firstName, employee.middleNameInitial, employee.lastName)
+				fmt.Printf("CPF: %s\n", employee.cpf)
+				fmt.Printf("Salário: %.2f\n", employee.salary)
+				fmt.Printf("Gênero: %s\n", employee.gender)
+				fmt.Printf("Data de nascimento: %s\n", employee.dateOfBirth)
+			}
 		case 0:
 			return
 		default:
