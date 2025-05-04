@@ -106,45 +106,123 @@ func readEmployees() ([]Employee, error) {
 }
 
 func readEmployeeByCPF(cpf string) (*Employee, error) {
-	file, err := os.Open(employeeFilename)
+	employees, err := readEmployees()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, emp := range employees {
+		if emp.cpf == cpf {
+			return &emp, nil
+		}
+	}
+
+	return nil, fmt.Errorf("Funcionário com CPF %s não encontrado", cpf)
+}
+
+func readProjects() ([]Project, error) {
+	file, err := os.Open(projectFilename)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
+	var projects []Project
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
 		fields := strings.Split(line, ",")
-
-		if len(fields) < 7 {
-			continue // linha mal formatada
+		if len(fields) < 3 {
+			continue
 		}
 
-		salary, err := strconv.ParseFloat(fields[4], 64)
+		id, err := strconv.Atoi(fields[0])
 		if err != nil {
 			continue
 		}
 
-		if fields[3] == cpf {
-			// Encontrou o funcionário
-			return &Employee{
-				firstName:         fields[0],
-				middleNameInitial: fields[1],
-				lastName:          fields[2],
-				cpf:               fields[3],
-				salary:            salary,
-				gender:            fields[5],
-				dateOfBirth:       fields[6],
-			}, nil
+		project := Project{
+			id:    id,
+			name:  fields[1],
+			local: fields[2],
 		}
+		projects = append(projects, project)
 	}
 
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
 
-	return nil, fmt.Errorf("Funcionário com CPF %s não encontrado", cpf)
+	return projects, nil
+}
+
+func readProjectByID(id int) (*Project, error) {
+	projects, err := readProjects()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, proj := range projects {
+		if proj.id == id {
+			return &proj, nil
+		}
+	}
+
+	return nil, fmt.Errorf("Projeto com ID %d não encontrado", id)
+}
+
+func readDepartments() ([]Department, error) {
+	file, err := os.Open(departmentFilename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var departments []Department
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Split(line, ",")
+		if len(fields) < 3 {
+			continue
+		}
+
+		id, err := strconv.Atoi(fields[0])
+		if err != nil {
+			continue
+		}
+
+		// Busca o gerente pelo CPF
+		manager, _ := readEmployeeByCPF(fields[2]) // se não encontrar, será nil
+
+		dept := Department{
+			id:      id,
+			name:    fields[1],
+			manager: manager,
+		}
+		departments = append(departments, dept)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return departments, nil
+}
+
+func readDepartmentByID(id int) (*Department, error) {
+	depts, err := readDepartments()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, dept := range depts {
+		if dept.id == id {
+			return &dept, nil
+		}
+	}
+
+	return nil, fmt.Errorf("Departamento com ID %d não encontrado", id)
 }
 
 /*func createProject(Project Project) //+exception
@@ -230,6 +308,7 @@ func projectMenu() {
 		fmt.Println("2: Listar projetos")
 		fmt.Println("3: Alterar projeto")
 		fmt.Println("4: Excluir projeto")
+		fmt.Println("5: Buscar projeto")
 		fmt.Println("0: Voltar")
 		fmt.Print("Digite a opção: ")
 
@@ -245,10 +324,30 @@ func projectMenu() {
 			fmt.Println("Criando projeto...")
 		case 2:
 			fmt.Println("Listando projetos...")
+			projects, err := readProjects()
+			if err != nil {
+				fmt.Println("Erro ao ler projetos:", err)
+				break
+			}
+			for _, project := range projects {
+				fmt.Printf("ID: %d | Nome: %s | Local: %s\n", project.id, project.name, project.local)
+			}
 		case 3:
 			fmt.Println("Alterando projeto...")
 		case 4:
 			fmt.Println("Excluindo projeto...")
+		case 5:
+			fmt.Println("Buscar projeto por ID...")
+			fmt.Print("Digite o ID do projeto: ")
+			var id int
+			fmt.Scan(&id)
+
+			project, err := readProjectByID(id)
+			if err != nil {
+				fmt.Println("Erro:", err)
+			} else {
+				fmt.Printf("ID: %d | Nome: %s | Local: %s\n", project.id, project.name, project.local)
+			}
 		case 0:
 			return
 		default:
@@ -265,6 +364,7 @@ func departmentMenu() {
 		fmt.Println("2: Listar departamento")
 		fmt.Println("3: Alterar departamento")
 		fmt.Println("4: Excluir departamento")
+		fmt.Println("5: Buscar departamento")
 		fmt.Println("0: Voltar")
 		fmt.Print("Digite a opção: ")
 
@@ -283,6 +383,18 @@ func departmentMenu() {
 			fmt.Println("Alterando departamento...")
 		case 4:
 			fmt.Println("Excluindo departamento...")
+		case 5:
+			fmt.Println("Buscando departamento...")
+			fmt.Print("Digite o ID do departamento: ")
+			var id int
+			fmt.Scan(&id)
+
+			dept, err := readDepartmentByID(id)
+			if err != nil {
+				fmt.Println("Erro:", err)
+			} else {
+				fmt.Printf("ID: %d | Nome: %s\n", dept.id, dept.name)
+			}
 		case 0:
 			return
 		default:
