@@ -52,18 +52,287 @@ func initializeFiles() {
 	}
 }
 
-func createEmployee(employee Employee) error {
+func saveEmployeeToFile(emp Employee) error {
 	file, err := os.OpenFile(employeeFilename, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
-	_, err = file.WriteString(fmt.Sprintf("%s,%s,%s,%s,%f,%s,%s\n", employee.firstName, employee.middleNameInitial, employee.lastName, employee.cpf, employee.salary, employee.gender, employee.dateOfBirth))
+	employeeLine := fmt.Sprintf("%s,%s,%s,%s,%s,%.2f,%s,%s",
+		emp.firstName,
+		emp.middleNameInitial,
+		emp.lastName,
+		emp.cpf,
+		emp.address,
+		emp.salary,
+		emp.gender,
+		emp.dateOfBirth)
+
+	if emp.department != nil {
+		employeeLine += "," + strconv.Itoa(emp.department.id)
+	} else {
+		employeeLine += ","
+	}
+
+	projectIDs := []string{}
+	for _, proj := range emp.projects {
+		projectIDs = append(projectIDs, strconv.Itoa(proj.id))
+	}
+
+	if len(projectIDs) > 0 {
+		employeeLine += "," + strings.Join(projectIDs, ";")
+	}
+
+	_, err = file.WriteString(employeeLine + "\n")
 	return err
 }
 
-// falta add a exception
+func saveEmployeesToFile(employees []Employee) error {
+	file, err := os.Create(employeeFilename) // sobrescreve o arquivo
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	for _, emp := range employees {
+		line := fmt.Sprintf("%s,%s,%s,%s,%s,%.2f,%s,%s",
+			emp.firstName,
+			emp.middleNameInitial,
+			emp.lastName,
+			emp.cpf,
+			emp.address,
+			emp.salary,
+			emp.gender,
+			emp.dateOfBirth)
+
+		if emp.department != nil {
+			line += "," + strconv.Itoa(emp.department.id)
+		} else {
+			line += ","
+		}
+
+		projectIDs := []string{}
+		for _, proj := range emp.projects {
+			projectIDs = append(projectIDs, strconv.Itoa(proj.id))
+		}
+		if len(projectIDs) > 0 {
+			line += "," + strings.Join(projectIDs, ";")
+		}
+
+		_, err := file.WriteString(line + "\n")
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func createEmployee() error {
+	var emp Employee
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Print("Digite o primeiro nome: ")
+	emp.firstName, _ = reader.ReadString('\n')
+	emp.firstName = strings.TrimSpace(emp.firstName)
+
+	fmt.Print("Digite a inicial do nome do meio: ")
+	emp.middleNameInitial, _ = reader.ReadString('\n')
+	emp.middleNameInitial = strings.TrimSpace(emp.middleNameInitial)
+
+	fmt.Print("Digite o último nome: ")
+	emp.lastName, _ = reader.ReadString('\n')
+	emp.lastName = strings.TrimSpace(emp.lastName)
+
+	fmt.Print("Digite o CPF: ")
+	emp.cpf, _ = reader.ReadString('\n')
+	emp.cpf = strings.TrimSpace(emp.cpf)
+
+	fmt.Print("Digite o endereço: ")
+	emp.address, _ = reader.ReadString('\n')
+	emp.address = strings.TrimSpace(emp.address)
+
+	fmt.Print("Digite o salário: ")
+	salaryStr, _ := reader.ReadString('\n')
+	salaryStr = strings.TrimSpace(salaryStr)
+	salary, err := strconv.ParseFloat(salaryStr, 64)
+	if err != nil {
+		return fmt.Errorf("salário inválido")
+	}
+	emp.salary = salary
+
+	fmt.Print("Digite o gênero (M/F): ")
+	emp.gender, _ = reader.ReadString('\n')
+	emp.gender = strings.TrimSpace(emp.gender)
+
+	fmt.Print("Data de nascimento (DD/MM/AAAA): ")
+	emp.dateOfBirth, _ = reader.ReadString('\n')
+	emp.dateOfBirth = strings.TrimSpace(emp.dateOfBirth)
+
+	fmt.Print("Digite o ID do departamento: ")
+	deptIDStr, _ := reader.ReadString('\n')
+	deptIDStr = strings.TrimSpace(deptIDStr)
+	deptID, err := strconv.Atoi(deptIDStr)
+	if err != nil {
+		return fmt.Errorf("ID do departamento inválido")
+	}
+	dept, err := readDepartmentByID(deptID)
+	if err != nil {
+		return err
+	}
+	emp.department = dept
+
+	fmt.Print("Digite o(s) ID(s) do(s) projeto(s) separado(s) por vírgula: ")
+	projIDsStr, _ := reader.ReadString('\n')
+	projIDsStr = strings.TrimSpace(projIDsStr)
+	projIDs := strings.Split(projIDsStr, ",")
+	for _, idStr := range projIDs {
+		idStr = strings.TrimSpace(idStr)
+		if idStr == "" {
+			continue
+		}
+		projID, err := strconv.Atoi(idStr)
+		if err != nil {
+			fmt.Println("ID de projeto inválido:", idStr)
+			continue
+		}
+		proj, err := readProjectByID(projID)
+		if err != nil {
+			fmt.Println("Projeto não encontrado:", projID)
+			continue
+		}
+		emp.projects = append(emp.projects, proj)
+	}
+
+	return saveEmployeeToFile(emp)
+}
+
+func updateEmployee(cpf string) error {
+	employees, err := readEmployees()
+	if err != nil {
+		return fmt.Errorf("erro ao ler funcionários: %v", err)
+	}
+
+	var emp *Employee
+	var index int
+	for i, e := range employees {
+		if e.cpf == cpf {
+			emp = &e
+			index = i
+			break
+		}
+	}
+
+	if emp == nil {
+		return fmt.Errorf("funcionário com CPF %s não encontrado", cpf)
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+
+	for {
+		var option int
+
+		fmt.Printf("\nEditando funcionário: %s, %s, %s\n", emp.firstName, emp.middleNameInitial, emp.lastName)
+		fmt.Println("--- Selecione o campo a ser editado ---")
+		fmt.Println("1: Nome")
+		fmt.Println("2: Inicial do Nome do Meio")
+		fmt.Println("3: Sobrenome")
+		fmt.Println("4: Endereço")
+		fmt.Println("5: Salário")
+		fmt.Println("6: Gênero")
+		fmt.Println("7: Data de Nascimento")
+
+		fmt.Println("0: Salvar e sair")
+		fmt.Print("Digite a opção: ")
+
+		_, err := fmt.Scan(&option)
+		if err != nil {
+			fmt.Println("Erro de entrada. Tente novamente.")
+			continue
+		}
+
+		// Limpa o buffer de nova linha
+		reader.ReadString('\n')
+
+		switch option {
+		case 1:
+			fmt.Print("Novo primeiro nome: ")
+			text, _ := reader.ReadString('\n')
+			emp.firstName = strings.TrimSpace(text)
+		case 2:
+			fmt.Print("Nova inicial do meio: ")
+			text, _ := reader.ReadString('\n')
+			emp.middleNameInitial = strings.TrimSpace(text)
+		case 3:
+			fmt.Print("Novo sobrenome: ")
+			text, _ := reader.ReadString('\n')
+			emp.lastName = strings.TrimSpace(text)
+		case 4:
+			fmt.Print("Novo endereço: ")
+			text, _ := reader.ReadString('\n')
+			emp.address = strings.TrimSpace(text)
+		case 5:
+			fmt.Print("Novo salário: ")
+			fmt.Scan(&emp.salary)
+		case 6:
+			fmt.Print("Novo gênero: ")
+			text, _ := reader.ReadString('\n')
+			emp.gender = strings.TrimSpace(text)
+		case 7:
+			fmt.Print("Nova data de nascimento: ")
+			text, _ := reader.ReadString('\n')
+			emp.dateOfBirth = strings.TrimSpace(text)
+		case 8:
+			fmt.Print("Digite o novo ID do departamento: ")
+			deptIDStr, _ := reader.ReadString('\n')
+			deptIDStr = strings.TrimSpace(deptIDStr)
+			deptID, err := strconv.Atoi(deptIDStr)
+			if err != nil {
+				return fmt.Errorf("ID do departamento inválido")
+			}
+			dept, err := readDepartmentByID(deptID)
+			if err != nil {
+				return err
+			}
+			emp.department = dept
+		case 9:
+			fmt.Print("Digite o(s) novo(s) ID(s) dos projeto(s) separado(s) por vírgula: ")
+			projIDsStr, _ := reader.ReadString('\n')
+			projIDsStr = strings.TrimSpace(projIDsStr)
+			projIDs := strings.Split(projIDsStr, ",")
+			for _, idStr := range projIDs {
+				idStr = strings.TrimSpace(idStr)
+				if idStr == "" {
+					continue
+				}
+				projID, err := strconv.Atoi(idStr)
+				if err != nil {
+					fmt.Println("ID de projeto inválido:", idStr)
+					continue
+				}
+				proj, err := readProjectByID(projID)
+				if err != nil {
+					fmt.Println("Projeto não encontrado:", projID)
+					continue
+				}
+				emp.projects = append(emp.projects, proj)
+			}
+		case 0:
+			employees[index] = *emp
+			err := saveEmployeesToFile(employees)
+			if err != nil {
+				return fmt.Errorf("erro ao salvar funcionário: %v", err)
+			}
+			fmt.Println("Funcionário atualizado com sucesso.")
+			return nil
+		default:
+			fmt.Println("Opção inválida.")
+		}
+	}
+}
+
+// Falta add a exception
 
 func readEmployees() ([]Employee, error) {
 	file, err := os.Open(employeeFilename)
@@ -111,13 +380,136 @@ func readEmployeeByCPF(cpf string) (*Employee, error) {
 		return nil, err
 	}
 
-	for _, emp := range employees {
-		if emp.cpf == cpf {
-			return &emp, nil
+	for i := range employees {
+		if employees[i].cpf == cpf {
+			return &employees[i], nil
 		}
 	}
 
 	return nil, fmt.Errorf("Funcionário com CPF %s não encontrado", cpf)
+}
+
+func saveProjectToFile(proj Project) error {
+	file, err := os.OpenFile(projectFilename, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(fmt.Sprintf("%d,%s,%s\n", proj.id, proj.name, proj.local))
+	return err
+}
+
+func saveProjectsToFile(projects []Project) error {
+	file, err := os.Create(projectFilename) // sobrescreve o arquivo
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	for _, proj := range projects {
+		line := fmt.Sprintf("%d,%s,%s",
+			proj.id,
+			proj.name,
+			proj.local,
+		)
+
+		_, err := file.WriteString(line + "\n")
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func createProject() error {
+	var proj Project
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Print("Digite o nome do projeto: ")
+	proj.name, _ = reader.ReadString('\n')
+	proj.name = strings.TrimSpace(proj.name)
+
+	fmt.Print("Digite o ID do projeto: ")
+	idStr, _ := reader.ReadString('\n')
+	idStr = strings.TrimSpace(idStr)
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		fmt.Println("ID inválido.")
+		return err
+	}
+	proj.id = id
+
+	fmt.Print("Digite o local do projeto: ")
+	proj.local, _ = reader.ReadString('\n')
+	proj.local = strings.TrimSpace(proj.local)
+
+	return saveProjectToFile(proj)
+}
+
+func updateProject(id int) error {
+	projects, err := readProjects()
+	if err != nil {
+		return fmt.Errorf("Erro ao ler projetos: %v", err)
+	}
+
+	var proj *Project
+	var index int
+	for i, p := range projects {
+		if p.id == id {
+			proj = &p
+			index = i
+			break
+		}
+	}
+
+	if proj == nil {
+		return fmt.Errorf("Projeto com ID %d não encontrado", id)
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+
+	for {
+		var option int
+
+		fmt.Printf("\nEditando projeto: %d, %s, %s\n", proj.id, proj.name, proj.local)
+		fmt.Println("--- Selecione o campo a ser editado ---")
+		fmt.Println("1: Nome")
+		fmt.Println("2: Local")
+		fmt.Println("0: Salvar e sair")
+		fmt.Print("Digite a opção: ")
+
+		_, err := fmt.Scan(&option)
+		if err != nil {
+			fmt.Println("Erro de entrada. Tente novamente.")
+			continue
+		}
+
+		reader.ReadString('\n')
+
+		switch option {
+		case 1:
+			fmt.Print("Novo nome: ")
+			text, _ := reader.ReadString('\n')
+			proj.name = strings.TrimSpace(text)
+		case 2:
+			fmt.Print("Nova local: ")
+			text, _ := reader.ReadString('\n')
+			proj.local = strings.TrimSpace(text)
+		case 0:
+			projects[index] = *proj
+			err := saveProjectsToFile(projects)
+			if err != nil {
+				return fmt.Errorf("erro ao salvar projeto: %v", err)
+			}
+			fmt.Println("Projeto atualizado com sucesso.")
+			return nil
+		default:
+			fmt.Println("Opção inválida.")
+		}
+	}
 }
 
 func readProjects() ([]Project, error) {
@@ -169,6 +561,186 @@ func readProjectByID(id int) (*Project, error) {
 	}
 
 	return nil, fmt.Errorf("Projeto com ID %d não encontrado", id)
+}
+
+func saveDepartmentToFile(dept Department) error {
+	file, err := os.OpenFile(departmentFilename, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	departmentLine := fmt.Sprintf("%d,%s,%s", dept.id, dept.name, dept.manager.cpf)
+
+	projectIDs := []string{}
+	for _, proj := range dept.projects {
+		projectIDs = append(projectIDs, strconv.Itoa(proj.id))
+	}
+
+	if len(projectIDs) > 0 {
+		departmentLine += "," + strings.Join(projectIDs, ";")
+	}
+
+	_, err = file.WriteString(departmentLine + "\n")
+	return err
+}
+
+func saveDepartmentsToFile(departments []Department) error {
+	file, err := os.Create(departmentFilename) // sobrescreve o arquivo
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	for _, dept := range departments {
+		line := fmt.Sprintf("%d,%s", dept.id, dept.name)
+
+		if dept.manager != nil {
+			line += "," + dept.manager.cpf
+		} else {
+			line += ","
+		}
+
+		projectIDs := []string{}
+		for _, proj := range dept.projects {
+			projectIDs = append(projectIDs, strconv.Itoa(proj.id))
+		}
+		if len(projectIDs) > 0 {
+			line += "," + strings.Join(projectIDs, ";")
+		}
+
+		_, err := file.WriteString(line + "\n")
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func createDepartment() error {
+	var dep Department
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Print("Digite o ID do departamento: ")
+	idStr, _ := reader.ReadString('\n')
+	idStr = strings.TrimSpace(idStr)
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		fmt.Println("ID inválido.")
+		return err
+	}
+	dep.id = id
+
+	fmt.Print("Digite o nome do departamento: ")
+	dep.name, _ = reader.ReadString('\n')
+	dep.name = strings.TrimSpace(dep.name)
+
+	fmt.Print("Digite o CPF do gerente: ")
+	cpf, _ := reader.ReadString('\n')
+	cpf = strings.TrimSpace(cpf)
+
+	manager, err := readEmployeeByCPF(cpf)
+	if err != nil {
+		fmt.Println("Nenhum gerente foi encontrado.")
+		return err
+	}
+	dep.manager = manager
+
+	fmt.Print("Digite os IDs dos projetos separados por vírgula: ")
+	projIDsStr, _ := reader.ReadString('\n')
+	projIDsStr = strings.TrimSpace(projIDsStr)
+	projIDs := strings.Split(projIDsStr, ",")
+	for _, idStr := range projIDs {
+		idStr = strings.TrimSpace(idStr)
+		if idStr == "" {
+			continue
+		}
+		projID, err := strconv.Atoi(idStr)
+		if err != nil {
+			fmt.Println("ID de projeto inválido:", idStr)
+			continue
+		}
+		proj, err := readProjectByID(projID)
+		if err != nil {
+			fmt.Println("Projeto não encontrado:", projID)
+			continue
+		}
+		dep.projects = append(dep.projects, proj)
+	}
+
+	return saveDepartmentToFile(dep)
+}
+
+func updateDepartment(id int) error {
+	departments, err := readDepartments()
+	if err != nil {
+		return fmt.Errorf("Erro ao ler departamentos: %v", err)
+	}
+
+	var dept *Department
+	var index int
+	for i, d := range departments {
+		if d.id == id {
+			dept = &departments[i]
+			index = i
+			break
+		}
+	}
+
+	if dept == nil {
+		return fmt.Errorf("Departamento com ID %d não encontrado", id)
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+
+	for {
+		var option int
+
+		fmt.Printf("\nEditando departamento: %d, %s\n", dept.id, dept.name)
+		fmt.Println("--- Selecione o campo a ser editado ---")
+		fmt.Println("1: Nome")
+		fmt.Println("2: Gerente (CPF)")
+		fmt.Println("0: Salvar e sair")
+		fmt.Print("Digite a opção: ")
+
+		_, err := fmt.Scan(&option)
+		if err != nil {
+			fmt.Println("Erro de entrada. Tente novamente.")
+			continue
+		}
+		reader.ReadString('\n')
+
+		switch option {
+		case 1:
+			fmt.Print("Novo nome: ")
+			text, _ := reader.ReadString('\n')
+			dept.name = strings.TrimSpace(text)
+		case 2:
+			fmt.Print("CPF do novo gerente: ")
+			cpf, _ := reader.ReadString('\n')
+			cpf = strings.TrimSpace(cpf)
+
+			manager, err := readEmployeeByCPF(cpf)
+			if err != nil {
+				fmt.Println("Erro ao buscar gerente:", err)
+			} else {
+				dept.manager = manager
+				fmt.Println("Gerente atualizado.")
+			}
+		case 0:
+			departments[index] = *dept
+			err := saveDepartmentsToFile(departments)
+			if err != nil {
+				return fmt.Errorf("Erro ao salvar departamento: %v", err)
+			}
+			fmt.Println("Departamento atualizado com sucesso.")
+			return nil
+		default:
+			fmt.Println("Opção inválida.")
+		}
+	}
 }
 
 func readDepartments() ([]Department, error) {
@@ -231,6 +803,8 @@ func readProjectByID(id int) (*Project, error)*/
 
 func employeeMenu() {
 	var op int
+	reader := bufio.NewReader(os.Stdin)
+
 	for {
 		fmt.Println("\n--- Funcionários ---")
 		fmt.Println("1: Criar funcionário")
@@ -247,20 +821,12 @@ func employeeMenu() {
 			continue
 		}
 
+		reader.ReadString('\n')
+
 		switch op {
 		case 1:
-			// TODO: implementar
 			fmt.Println("Criando funcionário...")
-			var emp1 Employee
-			emp1.firstName = "kelvin"
-			emp1.middleNameInitial = "L"
-			emp1.lastName = "Rodrigues"
-			emp1.address = "av 13 de maio"
-			emp1.cpf = "61824604319"
-			emp1.salary = 38813.32
-			emp1.gender = "M"
-			createEmployee(emp1)
-
+			createEmployee()
 		case 2:
 			employees, err := readEmployees()
 			if err != nil {
@@ -273,7 +839,12 @@ func employeeMenu() {
 					emp.cpf, emp.salary, emp.gender, emp.dateOfBirth)
 			}
 		case 3:
-			fmt.Println("Alterando funcionário...")
+			fmt.Print("Digite o CPF do funcionário a ser alterado: ")
+			var cpf string
+			fmt.Scan(&cpf)
+			updateEmployee(cpf)
+
+			//fmt.Println("Alterando funcionário...")
 		case 4:
 			fmt.Println("Excluindo funcionário...")
 		case 5:
@@ -281,6 +852,8 @@ func employeeMenu() {
 			fmt.Print("Digite o CPF: ")
 			var cpf string
 			fmt.Scan(&cpf)
+
+			reader.ReadString('\n')
 
 			employee, err := readEmployeeByCPF(cpf)
 			if err != nil {
@@ -302,6 +875,8 @@ func employeeMenu() {
 
 func projectMenu() {
 	var op int
+	reader := bufio.NewReader(os.Stdin)
+
 	for {
 		fmt.Println("\n--- Projetos ---")
 		fmt.Println("1: Criar projetos")
@@ -312,16 +887,19 @@ func projectMenu() {
 		fmt.Println("0: Voltar")
 		fmt.Print("Digite a opção: ")
 
+		// Lê a opção do menu
 		_, err := fmt.Scan(&op)
 		if err != nil {
 			fmt.Println("Erro de entrada. Tente novamente.")
 			continue
 		}
 
+		reader.ReadString('\n')
+
 		switch op {
 		case 1:
-			// TODO: implementar
 			fmt.Println("Criando projeto...")
+			createProject()
 		case 2:
 			fmt.Println("Listando projetos...")
 			projects, err := readProjects()
@@ -334,6 +912,10 @@ func projectMenu() {
 			}
 		case 3:
 			fmt.Println("Alterando projeto...")
+			fmt.Print("Digite o ID do projeto a ser alterado: ")
+			var id int
+			fmt.Scan(&id)
+			updateProject(id)
 		case 4:
 			fmt.Println("Excluindo projeto...")
 		case 5:
@@ -341,6 +923,8 @@ func projectMenu() {
 			fmt.Print("Digite o ID do projeto: ")
 			var id int
 			fmt.Scan(&id)
+
+			reader.ReadString('\n')
 
 			project, err := readProjectByID(id)
 			if err != nil {
@@ -358,10 +942,12 @@ func projectMenu() {
 
 func departmentMenu() {
 	var op int
+	reader := bufio.NewReader(os.Stdin)
+
 	for {
 		fmt.Println("\n--- Departamentos ---")
 		fmt.Println("1: Criar departamento")
-		fmt.Println("2: Listar departamento")
+		fmt.Println("2: Listar departamentos")
 		fmt.Println("3: Alterar departamento")
 		fmt.Println("4: Excluir departamento")
 		fmt.Println("5: Buscar departamento")
@@ -374,9 +960,15 @@ func departmentMenu() {
 			continue
 		}
 
+		reader.ReadString('\n')
+
 		switch op {
 		case 1:
 			fmt.Println("Criando departamento...")
+			err := createDepartment()
+			if err != nil {
+				fmt.Println("Erro ao criar departamento:", err)
+			}
 		case 2:
 			fmt.Println("Listando departamentos...")
 		case 3:
@@ -388,6 +980,8 @@ func departmentMenu() {
 			fmt.Print("Digite o ID do departamento: ")
 			var id int
 			fmt.Scan(&id)
+
+			reader.ReadString('\n')
 
 			dept, err := readDepartmentByID(id)
 			if err != nil {
